@@ -1,0 +1,3 @@
+[submodule "steam_deallist"]
+	path = steam_deallist
+	url = https://github.com/mellotanica/steam_deallist
