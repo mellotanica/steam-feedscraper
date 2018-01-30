@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 
 import steam_deallist.steam_deallist as steam
-import os
+from steam_deallist.userdata import Game
+import sys
+import urllib.error
 import urllib.request
-from bd4 import import BeautifulSoup
+from bs4 import BeautifulSoup
+
+# bisogna impostare (e ottenere) una chiave per isthereanydeal nel .bashrc
+# itad_api = os.environ["ISTHEREANYDEAL_API_KEY"]
 
 def get_checked_list():
     return []
@@ -17,22 +22,64 @@ def get_pending_items():
 def save_pending_items(l):
     return None
 
-def parseskidrowcrack(item):
-    # prima di tutto cerco dentro al <pre> se c'e` un link allo store 
+def game_from_link_and_name(link, name):
+    gid = None
 
-    # se non lo trovo devo scandire i <category>, tirando fuori il testo (e` un commento, tipo <![CDATA[...]]>)
-    # li dentro devo cercare il match "minore" con il titolo, cioe` il subset piu` piccolo del contenuto di <title>
-    # poi faccio la ricerca su steam con il titolo
+    if link is not None:
+        gid = steam.get_id_from_store_url(link)
+    else:
+        # se non c'e` faccio una ricerca su steam in base al nome
+        if name is not None:
+            gid, link = steam.query_steam_for_game(name)
+
+    if link is not None and gid is not None:
+        return Game(gid, 0, 0, 0, link, name, None)
 
     return None
+
+
+def parseskidrowcrack(item):
+    link = None
+    name = None
+
+    # per il titolo devo scandire i <category>, li dentro devo cercare il match "minore" con il titolo, cioe` il subset piu` piccolo del contenuto di <title>
+    title = item.find("title").text.lower()
+    for c in item.findAll("category"):
+        t = c.text
+        if title.startswith(t.lower()) and (name is None or len(t) < len(name)):
+            name = t
+
+    if name is None:
+        return None
+
+    # prima di tutto cerco dentro al <pre> se c'e` un link allo store
+    pre = item.find("pre")
+    if pre is not None:
+        toks = pre.text.split()
+        for t in toks:
+            if "store.steampowered.com" in t:
+                link = t
+                break
+
+    return game_from_link_and_name(link, name)
 
 def parseskidrowreloaded(item):
-    # prima di tutto cerco fra tutti i tag <a> se ce n'e` uno con href che inizia per http(s)://store.steampowered
+    link = None
+    name = None
 
-    # se non lo trovo cerco il <p> che (trimmato) inizia con "Title: ", tengo come titolo quello che c'e` fino alla mandata a capo (o <br />)
-    # poi faccio la ricerca su steam con il titolo
+    # prima di tutto cerco il <p> che (trimmato) inizia con "Title: ", tengo come titolo quello che c'e` fino alla mandata a capo (o <br />)
+    for p in item.findAll("p"):
+        if p.text.strip().startswith("Title: "):
+            name = p.text.split("\n")[0].lstrip("Title: ")
+            break
 
-    return None
+    # poi cerco fra tutti i tag <a> se ce n'e` uno con href che inizia per http(s)://store.steampowered
+    for a in item.findAll("a"):
+        if "store.steampowered.com" in a['href']:
+            link = a['href']
+            break
+
+    return game_from_link_and_name(link, name)
 
 def parsefitgirl(item):
     return None
@@ -45,15 +92,15 @@ sources = {
 }
 
 def update_all():
-    # bisogna impostare (e ottenere) una chiave per isthereanydeal nel .bashrc
-    itad_api = os.environ[ISTHEREANYDEAL_API_KEY]
-
     checked_list = get_checked_list()
     items = get_pending_items()
     
     for s in sources.keys():
-        soup = BeautifulSoup(urllib.request.urlopen(s), 'lxml')
-        items.extend([g for g in [sources[s](i) for i in soup.findAll("item")] if g.gid not in checked_list])
+        try:
+            soup = BeautifulSoup(urllib.request.urlopen(s), 'lxml-xml')
+            items.extend([g for g in [sources[s](i) for i in soup.findAll("item")] if g is not None and g.gid not in checked_list])
+        except urllib.error.HTTPError as e:
+            print("feed source {} is unreachable: {}".format(s, e), file=sys.stderr)
 
     save_pending_items(items)
 
