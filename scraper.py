@@ -4,15 +4,16 @@ import steam_deallist.steam_deallist as steam
 import sys
 import urllib.error
 import urllib.request
+import os
 import json
 from bs4 import BeautifulSoup
 
 genre_blacklist = [
     'tower defense',
     'racing',
-    'race'
+    'race',
 ]
-cache_file = "feeds_cache"
+cache_prefix = "feeds_cache"
 
 class Game:
     def __init__(self, name, gid, link, genre):
@@ -39,25 +40,55 @@ class Game:
     def from_dict(d):
         return Game(d['name'], d['gid'], d['link'], d['genre'])
 
-def get_checked_list():
-    global cache_file
+class Cache:
+    PENDING_SUFF = "_pending"
+    PENDING = 0
+    CHECKED_SUFF = "_checked"
+    CHECKED = 1
 
-    return []
+    def __init__(self, prefix):
+        self.prefix = prefix
+        if os.path.isfile(prefix+Cache.PENDING_SUFF):
+            self.load(Cache.PENDING)
+        else:
+            self.pending = []
 
-def save_checked_list(l):
-    global cache_file
+        if os.path.isfile(prefix+Cache.CHECKED_SUFF):
+            self.load(Cache.CHECKED)
+        else:
+            self.checked = []
 
-    return None
+    def load(self, list):
+        if list is Cache.PENDING:
+            self.pending = Cache.load_json(self.prefix+Cache.PENDING_SUFF)
+        elif list is Cache.CHECKED:
+            self.checked = Cache.load_json(self.prefix+Cache.CHECKED_SUFF)
 
-def get_pending_items():
-    global cache_file
+    @staticmethod
+    def load_json(fname):
+        f = open(fname, 'r')
+        try:
+            d = [Game.from_dict(g) for g in json.load(f)]
+        except:
+            d = None
+        f.close()
+        return d
 
-    return []
+    def save(self):
+        Cache.save_json(self.prefix+Cache.PENDING_SUFF, self.pending)
+        Cache.save_json(self.prefix+Cache.CHECKED_SUFF, self.checked)
 
-def save_pending_items(l):
-    global cache_file
+    @staticmethod
+    def save_json(fname, c_list):
+        if os.path.isfile(fname):
+            mode = "w"
+        else:
+            mode = "x"
 
-    return None
+        f = open(fname, mode)
+        json.dump([g.to_dict() for g in c_list], f)
+        f.close()
+
 
 def game_from_link_and_name(link, name, genre):
     gid = None
@@ -155,21 +186,38 @@ sources = {
         'http://feeds.feedburner.com/skidrowcrack': parseskidrowcrack
 }
 
-def update_all():
-    checked_list = get_checked_list()
-    items = get_pending_items()
-    
+def update_all(cache):
+    global genre_blacklist
+
+    items = []
+    items.extend(cache.pending)
+
     for s in sources.keys():
         try:
             soup = BeautifulSoup(urllib.request.urlopen(s), 'lxml-xml')
-            items.extend([g for g in [sources[s](i) for i in soup.findAll("item")] if g is not None and g.gid not in checked_list])
+            for i in soup.findAll("item"):
+                game = sources[s](i)
+                if game is None or game in items or game in cache.checked:
+                    continue
+
+                genre_ok = True
+                if game.genre is not None:
+                    for g in genre_blacklist:
+                        if g.lower() in game.genre.lower():
+                            genre_ok = False
+                            break
+
+                if genre_ok:
+                    items.append(game)
+
         except urllib.error.HTTPError as e:
             print("feed source {} is unreachable: {}".format(s, e), file=sys.stderr)
 
-    save_pending_items(items)
+    cache.pending = items
+    cache.save()
 
     return items
 
 if __name__ == "__main__":
-    for g in update_all():
+    for g in update_all(Cache(cache_prefix)):
         print(g)
