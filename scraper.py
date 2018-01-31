@@ -52,8 +52,9 @@ def parseskidrowcrack(item):
     if name is None:
         return None
 
-    # prima di tutto cerco dentro al <pre> se c'e` un link allo store
-    pre = item.find("pre")
+    # cerco dentro al <pre> se c'e` un link allo store
+    cont = BeautifulSoup(item.find("content:encoded").text, "lxml")
+    pre = cont.find("pre")
     if pre is not None:
         toks = pre.text.split()
         for t in toks:
@@ -67,14 +68,17 @@ def parseskidrowreloaded(item):
     link = None
     name = None
 
-    # prima di tutto cerco il <p> che (trimmato) inizia con "Title: ", tengo come titolo quello che c'e` fino alla mandata a capo (o <br />)
-    for p in item.findAll("p"):
-        if p.text.strip().startswith("Title: "):
-            name = p.text.split("\n")[0].lstrip("Title: ")
+    # prima di tutto devo decodificare il contenuto encoded
+    cont = BeautifulSoup(item.find("content:encoded").text, "lxml")
+
+    # cerco il <p> che (trimmato) inizia con "Title: ", tengo come titolo quello che c'e` fino alla mandata a capo (o <br />)
+    for p in cont.findAll("p"):
+        if p.text.strip().startswith("Title:"):
+            name = p.text.splitlines()[0].lstrip("Title:").strip()
             break
 
     # poi cerco fra tutti i tag <a> se ce n'e` uno con href che inizia per http(s)://store.steampowered
-    for a in item.findAll("a"):
+    for a in cont.findAll("a"):
         if "store.steampowered.com" in a['href']:
             link = a['href']
             break
@@ -107,4 +111,5 @@ def update_all():
     return items
 
 if __name__ == "__main__":
-    steam.print_game_list(update_all())
+    for g in update_all():
+        print("{}:\n\t{}".format(g.name, g.link))
