@@ -1,28 +1,65 @@
 #!/usr/bin/env python3
 
 import steam_deallist.steam_deallist as steam
-from steam_deallist.userdata import Game
 import sys
 import urllib.error
 import urllib.request
+import json
 from bs4 import BeautifulSoup
 
-# bisogna impostare (e ottenere) una chiave per isthereanydeal nel .bashrc
-# itad_api = os.environ["ISTHEREANYDEAL_API_KEY"]
+genre_blacklist = [
+    'tower defense',
+    'racing',
+    'race'
+]
+cache_file = "feeds_cache"
+
+class Game:
+    def __init__(self, name, gid, link, genre):
+        self.name = name
+        self.gid = gid
+        self.link = link
+        self.genre = genre
+
+    def __eq__(self, other):
+        return (self.name == other.name and self.gid == other.gid)
+
+    def __str__(self):
+        return "{} ({}):\n{}".format(self.name, self.genre, self.link)
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "gid": self.gid,
+            "link": self.link,
+            "genre": self.genre
+        }
+
+    @staticmethod
+    def from_dict(d):
+        return Game(d['name'], d['gid'], d['link'], d['genre'])
 
 def get_checked_list():
+    global cache_file
+
     return []
 
 def save_checked_list(l):
+    global cache_file
+
     return None
 
 def get_pending_items():
+    global cache_file
+
     return []
 
 def save_pending_items(l):
+    global cache_file
+
     return None
 
-def game_from_link_and_name(link, name):
+def game_from_link_and_name(link, name, genre):
     gid = None
 
     if link is not None:
@@ -33,7 +70,7 @@ def game_from_link_and_name(link, name):
             gid, link = steam.query_steam_for_game(name)
 
     if link is not None and gid is not None:
-        return Game(gid, 0, 0, 0, link, name, None)
+        return Game(name, gid, link, genre)
 
     return None
 
@@ -41,6 +78,7 @@ def game_from_link_and_name(link, name):
 def parseskidrowcrack(item):
     link = None
     name = None
+    genre = None
 
     # per il titolo devo scandire i <category>, li dentro devo cercare il match "minore" con il titolo, cioe` il subset piu` piccolo del contenuto di <title>
     title = item.find("title").text.lower()
@@ -52,21 +90,37 @@ def parseskidrowcrack(item):
     if name is None:
         return None
 
-    # cerco dentro al <pre> se c'e` un link allo store
+    # cerco dentro al <pre> se c'e` un link allo store e il genere
     cont = BeautifulSoup(item.find("content:encoded").text, "lxml")
     pre = cont.find("pre")
     if pre is not None:
-        toks = pre.text.split()
-        for t in toks:
-            if "store.steampowered.com" in t:
-                link = t
+        lines = pre.text.splitlines()
+        for l in lines:
+            if "store.steampowered.com" in l:
+                for t in l.split():
+                    if "store.steampowered.com" in t:
+                        link = t
+            if 'Genre:' in l:
+                genre = l[l.index("Genre:")+len("Genre:"):].strip()
+            if genre is not None and link is not None:
+                break
+    else:
+    # altrimenti il genere dovrebbe essere in un <p> generico
+        for p in cont.findAll("p"):
+            if "Genre:" in p.text:
+                for l in p.text.splitlines():
+                    if "Genre:" in l:
+                        genre = l[l.index("Genre:")+len("Genre:"):].strip()
+                        break
+            if genre is not None:
                 break
 
-    return game_from_link_and_name(link, name)
+    return game_from_link_and_name(link, name, genre)
 
 def parseskidrowreloaded(item):
     link = None
     name = None
+    genre = None
 
     # prima di tutto devo decodificare il contenuto encoded
     cont = BeautifulSoup(item.find("content:encoded").text, "lxml")
@@ -75,6 +129,11 @@ def parseskidrowreloaded(item):
     for p in cont.findAll("p"):
         if p.text.strip().startswith("Title:"):
             name = p.text.splitlines()[0].lstrip("Title:").strip()
+        if "Genre:" in p.text:
+            for l in p.text.splitlines():
+                if "Genre:" in l:
+                    genre = l[l.index("Genre:")+len("Genre:"):].strip()
+        if genre is not None and name is not None:
             break
 
     # poi cerco fra tutti i tag <a> se ce n'e` uno con href che inizia per http(s)://store.steampowered
@@ -83,15 +142,16 @@ def parseskidrowreloaded(item):
             link = a['href']
             break
 
-    return game_from_link_and_name(link, name)
+    return game_from_link_and_name(link, name, genre)
 
 def parsefitgirl(item):
     return None
 
 sources = {
         'http://feeds.feedburner.com/SkidrowReloadedGames': parseskidrowreloaded,
-        'https://feeds.feedburner.com/skidrowgamesfeed': parseskidrowcrack,
+        'https://feeds.feedburner.com/skidrowgamesfeed': parseskidrowreloaded,
         'http://fitgirl-repacks.com/feed/': parsefitgirl,
+        'https://feeds.feedburner.com/skidrowgames': parseskidrowcrack,
         'http://feeds.feedburner.com/skidrowcrack': parseskidrowcrack
 }
 
@@ -112,4 +172,4 @@ def update_all():
 
 if __name__ == "__main__":
     for g in update_all():
-        print("{}:\n\t{}".format(g.name, g.link))
+        print(g)

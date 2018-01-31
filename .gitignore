@@ -1,2 +1,4 @@
 *.pyc
 .idea/
+feeds_cache
+tags_*
