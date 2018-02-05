@@ -3,53 +3,21 @@ package main
 import (
 	"html/template"
 	"regexp"
-	"encoding/json"
-	"io/ioutil"
 	"net/http"
+	"feedscraper/games_cache"
 )
 
-var valid_review = regexp.MustCompile("^/review/$")
-var valid_checked = regexp.MustCompile("^/checked/$")
+var validReview = regexp.MustCompile("^/review/$")
+var validChecked = regexp.MustCompile("^/checked/$")
 
 var templates = template.Must(template.ParseFiles("review.html", "no_files.html"))
 
-var cache_prefix = "feeds_cache_"
-var pending_file = cache_prefix + "pending"
-var checked_file = cache_prefix + "checked"
-
-type Game struct {
-	Name string `json:"name"`
-	Gid string `json:"gid"`
-	Link string `json:"link"`
-	Genre string `json:"genre"`
-}
-
-func get_list(fname string) (*[]Game, error) {
-	data, err := ioutil.ReadFile(fname)
-	if err != nil {
-		return nil, err
-	}
-
-	var list []Game
-	err = json.Unmarshal(data, &list)
-	if err != nil {
-		return nil, err
-	}
-
-	return &list, nil
-}
-
-func store_list(fname string, list *[]Game) error {
-	data, err := json.Marshal(list)
-	if err != nil {
-		return err
-	}
-
-	return ioutil.WriteFile(fname, data, 0600)
-}
+var cachePrefix = "feeds_cache_"
+var pendingFile = cachePrefix + "pending"
+var checkedFile = cachePrefix + "checked"
 
 func reviewHandler(w http.ResponseWriter, r *http.Request, tokens []string) {
-	pending, err := get_list(pending_file)
+	pending, err := games_cache.GetList(pendingFile)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -85,7 +53,7 @@ func makeHandler(fn func (http.ResponseWriter, *http.Request, []string), validat
 }
 
 func main() {
-	http.HandleFunc("/review/", makeHandler(reviewHandler, valid_review))
-	http.HandleFunc("/checked/", makeHandler(checkedHandler, valid_checked))
+	http.HandleFunc("/review/", makeHandler(reviewHandler, validReview))
+	http.HandleFunc("/checked/", makeHandler(checkedHandler, validChecked))
 	http.ListenAndServe(":8080", nil)
 }
