@@ -12,8 +12,6 @@ import (
 	"github.com/texttheater/golang-levenshtein/levenshtein"
 )
 
-const mediumCacheSize = 30
-
 type ScraperError struct {
 	What string
 }
@@ -242,8 +240,8 @@ func scrapeSource(source dataSource) (*[]games_cache.Game, *[]games_cache.Game) 
 		return nil, nil
 	}
 
-	var games = make([]games_cache.Game, 0, mediumCacheSize)
-	var dubious_games = make([]games_cache.Game, 0, mediumCacheSize)
+	var games = make([]games_cache.Game, 0, games_cache.MediumCacheSize)
+	var dubious_games = make([]games_cache.Game, 0, games_cache.MediumCacheSize)
 
 	for _, i := range feed.Items {
 		game, err := source.parser(i)
@@ -262,30 +260,32 @@ func scrapeSource(source dataSource) (*[]games_cache.Game, *[]games_cache.Game) 
 	return &games, &dubious_games
 }
 
+func updateCache(pending, dubious, checked *games_cache.Cache, scraped_list, scraped_dubious []games_cache.Game) {
+	// TODO clean cache as we update it (skip duplicated games and blacklisted ones)
+
+	pending.AppendElements(scraped_list...)
+	dubious.AppendElements(scraped_dubious...)
+
+	pending.Store()
+	dubious.Store()
+}
+
 func main() {
-	var cache = make([]games_cache.Game, 0, mediumCacheSize*len(sources))
-	var dubious_cache = make([]games_cache.Game, 0, mediumCacheSize*len(sources))
+	var pending_cache = games_cache.LoadCache(games_cache.GamesCachePendingFile)
+	var dubious_cache = games_cache.LoadCache(games_cache.GamesCacheDubiousFile)
+	var checked_cache = games_cache.LoadCache(games_cache.GamesCacheCheckedFile)
+
 	for _, source := range sources {
-		games, dubious_games := scrapeSource(source)
-		if games != nil{
-			for _, g := range (*games) {
-				cache = append(cache, g)
-			}
-		}
-		if dubious_games != nil {
-			for _, g := range (*dubious_games) {
-				dubious_cache = append(dubious_cache, g)
-			}
-		}
+		list, dubious := scrapeSource(source)
+		updateCache(pending_cache, dubious_cache, checked_cache, *list, *dubious)
 	}
 
-	// TODO clean cache as we update it (skip duplicated games and blacklisted ones
 
-	for _, g := range cache {
+	for _, g := range pending_cache.GetContent() {
 		log.Println(g)
 	}
 	log.Println("Dubious games (link is probably wrong: ")
-	for _, g := range dubious_cache {
+	for _, g := range dubious_cache.GetContent() {
 		log.Println(g)
 	}
 }
