@@ -261,7 +261,7 @@ func scrapeSource(source dataSource) (*[]games_cache.Game, *[]games_cache.Game) 
 }
 
 func updateCache(pending, dubious, checked *games_cache.Cache, scraped_list, scraped_dubious []games_cache.Game) {
-	// TODO clean cache as we update it (skip duplicated games and blacklisted ones)
+	// TODO clean cache as we update it (skip checked and blacklisted games)
 
 	pending.AppendElements(scraped_list...)
 	dubious.AppendElements(scraped_dubious...)

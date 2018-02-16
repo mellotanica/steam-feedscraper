@@ -20,10 +20,10 @@ func (g Game) String() string {
 }
 
 type Cache struct {
+	sync.RWMutex
 	filename string
-	games []Game
+	games map[string]Game
 	lastUpdate time.Time
-	mutex sync.Mutex
 }
 
 const MediumCacheSize = 30
@@ -45,14 +45,13 @@ func LoadCache(fname string) *Cache {
 	if !ok {
 		data, err := ioutil.ReadFile(fname)
 		if err != nil {
-			cache = Cache{fname, make([]Game, 0, MediumCacheSize), time.Now(), sync.Mutex{}}
+			cache = Cache{filename: fname, games: make(map[string]Game), lastUpdate: time.Now()}
 		} else {
 			var list []Game
 			err = json.Unmarshal(data, &list)
-			if err != nil {
-				cache = Cache{fname, make([]Game, 0, MediumCacheSize), time.Now(), sync.Mutex{}}
-			} else {
-				cache = Cache{fname, list, time.Now(), sync.Mutex{}}
+			cache = Cache{filename: fname, games: make(map[string]Game), lastUpdate: time.Now()}
+			if err == nil {
+				cache.AppendElements(list...)
 			}
 		}
 		handler[fname] = cache
@@ -61,41 +60,50 @@ func LoadCache(fname string) *Cache {
 }
 
 func (c *Cache) Store() error {
-	c.mutex.Lock()
+	c.Lock()
 	data, err := json.Marshal(c.games)
 	if err != nil {
 		return err
 	}
-	c.mutex.Unlock()
+	c.Unlock()
 
 	return ioutil.WriteFile(c.filename, data, 0600)
 }
 
 func (c *Cache) GetContent() []Game {
-	c.mutex.Lock()
+	c.RLock()
 	res := make([]Game, len(c.games))
-	copy(res, c.games)
-	c.mutex.Unlock()
+	i := 0
+	for _, v := range c.games {
+		res[i] = v
+		i ++
+	}
+	c.RUnlock()
 	return res
 }
 
 func (c *Cache) ClearContent() {
-	c.mutex.Lock()
-	c.games = c.games[:0]
+	c.Lock()
+	c.games = make(map[string]Game)
 	c.lastUpdate = time.Now()
-	c.mutex.Unlock()
+	c.Unlock()
 }
 
 func (c *Cache) AppendElements(games ...Game) {
-	c.mutex.Lock()
-	c.games = append(c.games, games...)
+	c.Lock()
+	for _, g := range games {
+		_, ok := c.games[g.Gid]
+		if !ok {
+			c.games[g.Gid] = g
+		}
+	}
 	c.lastUpdate = time.Now()
-	c.mutex.Unlock()
+	c.Unlock()
 }
 
 func (c *Cache) LastUpdate() time.Time {
-	c.mutex.Lock()
+	c.RLock()
 	t := c.lastUpdate
-	c.mutex.Unlock()
+	c.RUnlock()
 	return t
 }
