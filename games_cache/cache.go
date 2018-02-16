@@ -6,7 +6,16 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	"log"
 )
+
+type CacheError struct {
+	What string
+}
+
+func (e CacheError) Error() string {
+	return fmt.Sprintf("CacheError: %s", e.What)
+}
 
 type Game struct {
 	Name string `json:"name"`
@@ -51,11 +60,13 @@ func LoadCache(fname string) *Cache {
 		if err != nil {
 			cache = Cache{filename: fname, games: make(map[string]Game), lastUpdate: time.Now()}
 		} else {
-			var list []Game
-			err = json.Unmarshal(data, &list)
-			cache = Cache{filename: fname, games: make(map[string]Game), lastUpdate: time.Now()}
+			var games map[string]Game
+			err = json.Unmarshal(data, &games)
 			if err == nil {
-				cache.AppendElements(list...)
+				cache = Cache{filename: fname, games: games, lastUpdate: time.Now()}
+			} else {
+				cache = Cache{filename: fname, games: make(map[string]Game), lastUpdate: time.Now()}
+				log.Print(err)
 			}
 		}
 		handler[fname] = cache
@@ -74,16 +85,26 @@ func (c *Cache) Store() error {
 	return ioutil.WriteFile(c.filename, data, 0600)
 }
 
-func (c *Cache) GetContent() []Game {
+func (c *Cache) GetContent() (list []Game) {
 	c.RLock()
-	res := make([]Game, len(c.games))
+	list = make([]Game, len(c.games))
 	i := 0
 	for _, v := range c.games {
-		res[i] = v
+		list[i] = v
 		i ++
 	}
 	c.RUnlock()
-	return res
+	return
+}
+
+func (c *Cache) GetFirst() (game Game) {
+	c.RLock()
+	for _, g := range c.games {
+		game = g
+		break
+	}
+	c.RUnlock()
+	return
 }
 
 func (c *Cache) ClearContent() {
@@ -105,18 +126,40 @@ func (c *Cache) AppendElements(games ...Game) {
 	c.Unlock()
 }
 
-func (c *Cache) GameInList(game Game) (bool) {
+func (c *Cache) GameInList(game Game) (alreadyPresent bool) {
 	c.RLock()
-	g, ok := c.games[game.Gid]
-	if ok {
-		ok = g.Equals(game)
+	g, alreadyPresent := c.games[game.Gid]
+	if alreadyPresent {
+		alreadyPresent = g.Equals(game)
 	}
 	c.RUnlock()
+	return
 }
 
-func (c *Cache) LastUpdate() time.Time {
+func (c *Cache) LastUpdate() (t time.Time) {
 	c.RLock()
-	t := c.lastUpdate
+	t = c.lastUpdate
 	c.RUnlock()
-	return t
+	return
+}
+
+func (c *Cache) Lenght() (size int) {
+	c.RLock()
+	size = len(c.games)
+	c.RUnlock()
+	return
+}
+
+func (c *Cache) Migrage(target *Cache, gid string) error {
+	c.Lock()
+	g, ok := c.games[gid]
+	if ok {
+		delete(c.games, gid)
+	}
+	c.Unlock()
+	if !ok {
+		return CacheError{fmt.Sprintf("Cache does not contain game %s", gid)}
+	}
+	target.AppendElements(g)
+	return nil
 }

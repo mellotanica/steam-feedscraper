@@ -5,25 +5,21 @@ import (
 	"regexp"
 	"net/http"
 	"feedscraper/games_cache"
+	"log"
+	"fmt"
 )
 
 var validReview = regexp.MustCompile("^/review/$")
-var validChecked = regexp.MustCompile("^/checked/$")
+var validChecked = regexp.MustCompile("^/checked/.*$")
 
 var templates = template.Must(template.ParseFiles("review.html", "no_files.html"))
 
-var cachePrefix = "feeds_cache_"
-var pendingFile = cachePrefix + "pending"
-var checkedFile = cachePrefix + "checked"
-
 func reviewHandler(w http.ResponseWriter, r *http.Request, tokens []string) {
-	pending, err := games_cache.GetList(pendingFile)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	var err error
 
-	if len(*pending) <= 0 {
+	pending := games_cache.LoadCache(games_cache.GamesCachePendingFile)
+
+	if pending.Lenght() <= 0 {
 		err = templates.ExecuteTemplate(w, "no_files.html", nil)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -31,14 +27,29 @@ func reviewHandler(w http.ResponseWriter, r *http.Request, tokens []string) {
 		return
 	}
 
-	err = templates.ExecuteTemplate(w, "review.html", (*pending)[0])
+	err = templates.ExecuteTemplate(w, "review.html", pending.GetFirst())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-func checkedHandler(w http.ResponseWriter, r *http.Request, token []string) {
+func store_caches(caches... *games_cache.Cache) {
+	for _, cache := range caches {
+		cache.Store()
+	}
+}
 
+func checkedHandler(w http.ResponseWriter, r *http.Request, token []string) {
+	gid := r.URL.Path[len("/checked/"):]
+
+	pending := games_cache.LoadCache(games_cache.GamesCachePendingFile)
+	checked := games_cache.LoadCache(games_cache.GamesCacheCheckedFile)
+
+	pending.Migrage(checked, gid)
+
+	go store_caches(pending, checked)
+
+	http.Redirect(w, r, "/review/", http.StatusFound)
 }
 
 func makeHandler(fn func (http.ResponseWriter, *http.Request, []string), validator *regexp.Regexp) http.HandlerFunc {
@@ -53,7 +64,12 @@ func makeHandler(fn func (http.ResponseWriter, *http.Request, []string), validat
 }
 
 func main() {
+	port := 8080
+
 	http.HandleFunc("/review/", makeHandler(reviewHandler, validReview))
 	http.HandleFunc("/checked/", makeHandler(checkedHandler, validChecked))
-	http.ListenAndServe(":8080", nil)
+
+	log.Printf("Starting service on port %d\n", port)
+
+	http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 }
