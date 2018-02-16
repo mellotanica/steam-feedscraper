@@ -1,4 +1,4 @@
-package main
+package services
 
 import (
 	"html/template"
@@ -12,7 +12,7 @@ import (
 var validReview = regexp.MustCompile("^/review/$")
 var validChecked = regexp.MustCompile("^/checked/.*$")
 
-var templates = template.Must(template.ParseFiles("review.html", "no_files.html"))
+var templates = template.Must(template.ParseFiles("templates/review.html", "templates/no_files.html"))
 
 func reviewHandler(w http.ResponseWriter, r *http.Request, tokens []string) {
 	var err error
@@ -63,7 +63,7 @@ func makeHandler(fn func (http.ResponseWriter, *http.Request, []string), validat
 	}
 }
 
-func start_service(port int) {
+func Start_service(port int) {
 	http.HandleFunc("/review/", makeHandler(reviewHandler, validReview))
 	http.HandleFunc("/checked/", makeHandler(checkedHandler, validChecked))
 
@@ -72,6 +72,3 @@ func start_service(port int) {
 	http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 }
 
-func main() {
-	start_service(8080)
-}
