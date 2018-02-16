@@ -306,16 +306,22 @@ func updateCache(pending, dubious, checked *games_cache.Cache, scraped_list, scr
 	dubious.Store()
 }
 
-func main() {
-	var pending_cache = games_cache.LoadCache(games_cache.GamesCachePendingFile)
-	var dubious_cache = games_cache.LoadCache(games_cache.GamesCacheDubiousFile)
-	var checked_cache = games_cache.LoadCache(games_cache.GamesCacheCheckedFile)
+func update_all() {
+	pending_cache := games_cache.LoadCache(games_cache.GamesCachePendingFile)
+	dubious_cache := games_cache.LoadCache(games_cache.GamesCacheDubiousFile)
+	checked_cache := games_cache.LoadCache(games_cache.GamesCacheCheckedFile)
 
 	for _, source := range sources {
 		list, dubious := scrapeSource(source)
 		updateCache(pending_cache, dubious_cache, checked_cache, *list, *dubious)
 	}
+}
 
+func main() {
+	update_all()
+
+	pending_cache := games_cache.LoadCache(games_cache.GamesCachePendingFile)
+	dubious_cache := games_cache.LoadCache(games_cache.GamesCacheDubiousFile)
 
 	for _, g := range pending_cache.GetContent() {
 		log.Println(g)

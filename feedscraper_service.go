@@ -63,13 +63,15 @@ func makeHandler(fn func (http.ResponseWriter, *http.Request, []string), validat
 	}
 }
 
-func main() {
-	port := 8080
-
+func start_service(port int) {
 	http.HandleFunc("/review/", makeHandler(reviewHandler, validReview))
 	http.HandleFunc("/checked/", makeHandler(checkedHandler, validChecked))
 
 	log.Printf("Starting service on port %d\n", port)
 
 	http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
+}
+
+func main() {
+	start_service(8080)
 }
