@@ -232,6 +232,12 @@ var sources = []dataSource{
 	//dataSource{"http://fitgirl-repacks.com/feed/", parseFitGirlRepack},
 }
 
+var blacklist = []string {
+	"tower defense",
+	"racing",
+	"race",
+}
+
 func scrapeSource(source dataSource) (*[]games_cache.Game, *[]games_cache.Game) {
 	fp := gofeed.NewParser()
 	feed, err := fp.ParseURL(source.url)
@@ -260,13 +266,43 @@ func scrapeSource(source dataSource) (*[]games_cache.Game, *[]games_cache.Game) 
 	return &games, &dubious_games
 }
 
+func cleanList(list []games_cache.Game, excludes... *games_cache.Cache) (clean_list []games_cache.Game) {
+	clean_list = make([]games_cache.Game, 0, len(list))
+
+	for _, g := range list {
+		skip := false
+		for _, e := range excludes {
+			if e.GameInList(g) {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+		genre := strings.ToLower(g.Genre)
+		for _, b := range blacklist {
+			if strings.Contains(genre, b) {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+		clean_list = append(clean_list, g)
+	}
+
+	return
+}
+
 func updateCache(pending, dubious, checked *games_cache.Cache, scraped_list, scraped_dubious []games_cache.Game) {
-	// TODO clean cache as we update it (skip checked and blacklisted games)
-
+	scraped_list = cleanList(scraped_list, checked)
 	pending.AppendElements(scraped_list...)
-	dubious.AppendElements(scraped_dubious...)
-
 	pending.Store()
+
+	scraped_dubious = cleanList(scraped_dubious, pending, checked)
+	dubious.AppendElements(scraped_dubious...)
 	dubious.Store()
 }
 

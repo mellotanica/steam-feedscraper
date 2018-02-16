@@ -19,6 +19,10 @@ func (g Game) String() string {
 	return fmt.Sprintf("Title: %s (%s)\n\t%s\n", g.Name, g.Genre, g.Link)
 }
 
+func (g Game) Equals(other Game) (bool) {
+	return g.Gid == other.Gid && g.Name == other.Name
+}
+
 type Cache struct {
 	sync.RWMutex
 	filename string
@@ -99,6 +103,15 @@ func (c *Cache) AppendElements(games ...Game) {
 	}
 	c.lastUpdate = time.Now()
 	c.Unlock()
+}
+
+func (c *Cache) GameInList(game Game) (bool) {
+	c.RLock()
+	g, ok := c.games[game.Gid]
+	if ok {
+		ok = g.Equals(game)
+	}
+	c.RUnlock()
 }
 
 func (c *Cache) LastUpdate() time.Time {
