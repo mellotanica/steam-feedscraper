@@ -150,11 +150,15 @@ func (c *Cache) Lenght() (size int) {
 	return
 }
 
-func (c *Cache) Migrage(target *Cache, gid string) error {
+func (c *Cache) Migrage(target *Cache, gid string, name string) error {
 	c.Lock()
 	g, ok := c.games[gid]
 	if ok {
-		delete(c.games, gid)
+		if g.Name == name {
+			delete(c.games, gid)
+		} else {
+			ok = false
+		}
 	}
 	c.Unlock()
 	if !ok {

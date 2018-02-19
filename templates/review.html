@@ -6,7 +6,17 @@
 </head>
 <body>
 <div>
-    <h1>Reviewing {{.Name}}</h1><h2 align="right"><form action="/checked/{{.Gid}}" method="post"><div><input type="submit" value="NEXT"></div></form></h2><br />
+    <h1>Reviewing {{.Name}}</h1>
+    <h2 align="right">
+        <form action="/checked" method="post">
+            <div>
+                <input type="hidden" value="{{.Gid}}" name="gid" />
+                <input type="hidden" value="{{.Name}}" name="name" />
+                <button type="submit">NEXT</button>
+            </div>
+        </form>
+    </h2>
+    <br />
     <h3>Genre: {{.Genre}}</h3>
 </div>
 <div><a href="{{.Link}}">{{.Link}}</a></div>

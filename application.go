@@ -24,5 +24,5 @@ func keepCacheUpdated() {
 
 func main()  {
 	go keepCacheUpdated()
-	services.Start_service(8080)
+	services.StartService(8080)
 }
