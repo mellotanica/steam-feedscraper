@@ -1,12 +1,12 @@
 package games_cache
 
 import (
-	"io/ioutil"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"sync"
 	"time"
-	"log"
 )
 
 type CacheError struct {
@@ -18,9 +18,9 @@ func (e CacheError) Error() string {
 }
 
 type Game struct {
-	Name string `json:"name"`
-	Gid string `json:"gid"`
-	Link string `json:"link"`
+	Name  string `json:"name"`
+	Gid   string `json:"gid"`
+	Link  string `json:"link"`
 	Genre string `json:"genre"`
 }
 
@@ -28,14 +28,14 @@ func (g Game) String() string {
 	return fmt.Sprintf("Title: %s (%s)\n\t%s\n", g.Name, g.Genre, g.Link)
 }
 
-func (g Game) Equals(other Game) (bool) {
+func (g Game) Equals(other Game) bool {
 	return g.Gid == other.Gid && g.Name == other.Name
 }
 
 type Cache struct {
 	sync.RWMutex
-	filename string
-	games map[string]Game
+	filename   string
+	games      map[string]Game
 	lastUpdate time.Time
 }
 
@@ -91,10 +91,20 @@ func (c *Cache) GetContent() (list []Game) {
 	i := 0
 	for _, v := range c.games {
 		list[i] = v
-		i ++
+		i++
 	}
 	c.RUnlock()
 	return
+}
+
+func (c *Cache) GetElementById(gid string) (*Game, bool) {
+	c.RLock()
+	g, ok := c.games[gid]
+	c.RUnlock()
+	if ok {
+		return &g, true
+	}
+	return nil, false
 }
 
 func (c *Cache) GetFirst() (game Game) {
