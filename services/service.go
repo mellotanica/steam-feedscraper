@@ -11,11 +11,13 @@ import (
 	"strings"
 	"io/ioutil"
 	"time"
+	"encoding/json"
 )
 
 var templates = template.Must(template.ParseFiles("templates/review.html", "templates/no_files.html"))
 
 const redirPath = "/redir/"
+const steamWishlistApi = "http://store.steampowered.com/api/addtowishlist"
 
 func store_caches(caches ...*games_cache.Cache) {
 	for _, cache := range caches {
@@ -29,6 +31,10 @@ type steamgame struct {
 	Link    string
 	Genre   string
 	Content string
+}
+
+type wishlistResult struct {
+	Success bool `json:"success"`
 }
 
 func createCookie(name, val string, maxage int) (*http.Cookie) {
@@ -130,15 +136,18 @@ func reviewHandler(res http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func checkedHandler(res http.ResponseWriter, req *http.Request) {
-	if err := req.ParseForm(); err != nil {
-		http.Error(res, err.Error(), http.StatusNotAcceptable)
+func getGamePostFields(req *http.Request) (name, gid string, err error) {
+	err = nil
+	if err = req.ParseForm(); err != nil {
 		return
 	}
 
-	name := req.PostFormValue("name")
-	gid := req.PostFormValue("gid")
+	name = req.PostFormValue("name")
+	gid = req.PostFormValue("gid")
+	return
+}
 
+func checkGame(name, gid string, res http.ResponseWriter, req *http.Request) {
 	pending := games_cache.LoadCache(games_cache.GamesCachePendingFile)
 	checked := games_cache.LoadCache(games_cache.GamesCacheCheckedFile)
 
@@ -153,6 +162,68 @@ func checkedHandler(res http.ResponseWriter, req *http.Request) {
 	http.Redirect(res, req, "/review", http.StatusFound)
 }
 
+func checkedHandler(res http.ResponseWriter, req *http.Request) {
+	name, gid, err := getGamePostFields(req)
+	if err != nil {
+		http.Error(res, err.Error(), http.StatusNotAcceptable)
+		return
+	}
+
+	checkGame(name, gid, res, req)
+}
+
+func addPostField(data url.Values, key, value string) {
+	data[key] = make([]string, 1)
+	data[key][0] = value
+}
+
+func wishlistHandler(res http.ResponseWriter, req *http.Request) {
+	name, gid, err := getGamePostFields(req)
+	if err != nil {
+		http.Error(res, err.Error(), http.StatusNotAcceptable)
+		return
+	}
+
+	data := make(url.Values)
+
+	cookie, err := req.Cookie("sessionid")
+	if err != nil {
+		http.Error(res, err.Error(), http.StatusNotAcceptable)
+		return
+	}
+	addPostField(data, "sessionid", cookie.Value)
+
+	addPostField(data, "appid", strings.TrimLeft(gid[strings.Index(gid,"/"):], "/"))
+
+	postres, err := http.PostForm(steamWishlistApi, data)
+	if err != nil {
+		http.Error(res, err.Error(), http.StatusNotAcceptable)
+		return
+	}
+	defer postres.Body.Close()
+
+	response, err := ioutil.ReadAll(postres.Body)
+	if err != nil {
+		log.Printf("ERROR reading wishlist post response for %s (%s):\n %s\n", name, gid, err.Error())
+		http.Error(res, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	result := wishlistResult{}
+	err = json.Unmarshal(response, &result)
+	if err != nil {
+		log.Printf("ERROR reading wishlist post response for %s (%s):\n %s\n", name, gid, err.Error())
+		http.Error(res, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if !result.Success {
+		http.Error(res, "Steam rejected wishlist request", http.StatusInternalServerError)
+		return
+	}
+
+	checkGame(name, gid, res, req)
+}
 
 func Rewriter(h http.Handler) http.Handler {
 	redirlen := len(redirPath)
@@ -173,6 +244,7 @@ func StartService(port int) {
 
 	router.HandleFunc("/review", reviewHandler).Methods("GET")
 	router.HandleFunc("/checked", checkedHandler).Methods("POST")
+	router.HandleFunc("/wishlist", wishlistHandler).Methods("POST")
 	router.HandleFunc(fmt.Sprintf("%s{link}", redirPath), redirHandler)
 
 	log.Printf("Starting service on port %d\n", port)

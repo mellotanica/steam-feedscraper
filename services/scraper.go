@@ -13,6 +13,8 @@ type dataSource struct {
 	parser func (*gofeed.Item) (*games_cache.Game, error)
 }
 
+const wishlistUrl = "http://store.steampowered.com/wishlist/id/mellotanica"
+
 var sources = []dataSource{
 	dataSource{"http://feeds.feedburner.com/SkidrowReloadedGames", scrapers.ParseSkidRowReloaded},
 	dataSource{"https://feeds.feedburner.com/skidrowgamesfeed", scrapers.ParseSkidRowReloaded},
@@ -95,10 +97,16 @@ func updateCache(pending, dubious, checked *games_cache.Cache, scraped_list, scr
 	dubious.Store()
 }
 
+func scrapeWishlist(checked *games_cache.Cache) {
+	//TODO: this
+}
+
 func Update_all() {
 	pending_cache := games_cache.LoadCache(games_cache.GamesCachePendingFile)
 	dubious_cache := games_cache.LoadCache(games_cache.GamesCacheDubiousFile)
 	checked_cache := games_cache.LoadCache(games_cache.GamesCacheCheckedFile)
+
+	scrapeWishlist(checked_cache)
 
 	for _, source := range sources {
 		list, dubious := scrapeSource(source)
