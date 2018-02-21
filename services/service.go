@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"io/ioutil"
+	"time"
 )
 
 var templates = template.Must(template.ParseFiles("templates/review.html", "templates/no_files.html"))
@@ -30,6 +31,22 @@ type steamgame struct {
 	Content string
 }
 
+func createCookie(name, val string, maxage int) (*http.Cookie) {
+	return & http.Cookie{
+		name,
+		val,
+		"",
+		"",
+		time.Now(),
+		"",
+		maxage,
+		false,
+		false,
+		"",
+		nil,
+	}
+}
+
 func renderRedir(target string, req *http.Request, w http.ResponseWriter) (string, error) {
 	newReq, err := http.NewRequest(req.Method, target, req.Body)
 	if err != nil {
@@ -37,9 +54,13 @@ func renderRedir(target string, req *http.Request, w http.ResponseWriter) (strin
 	}
 
 	for _, c := range req.Cookies() {
-		c.Domain = "store.steampowered.com"
 		newReq.AddCookie(c)
 	}
+	// skip age and mature content checks
+	newReq.AddCookie(createCookie("mature_content", "1", -1))
+	newReq.AddCookie(createCookie("lastagecheckage", "17-August-1982", -1))
+	newReq.AddCookie(createCookie("birthtime", "398383201", -1))
+
 	resp, err := http.DefaultClient.Do(newReq)
 	if err != nil {
 		return "", err
@@ -56,7 +77,6 @@ func renderRedir(target string, req *http.Request, w http.ResponseWriter) (strin
 	html = strings.Replace(html, "http://store.steampowered.com/", fmt.Sprintf("%shttp://store.steampowered.com/", redirPath), -1)
 
 	for _, c := range resp.Cookies() {
-		c.Domain = "store.steampowered.com"
 		http.SetCookie(w, c)
 	}
 
