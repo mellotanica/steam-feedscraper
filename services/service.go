@@ -122,7 +122,7 @@ func checkedHandler(res http.ResponseWriter, req *http.Request) {
 	pending := games_cache.LoadCache(games_cache.GamesCachePendingFile)
 	checked := games_cache.LoadCache(games_cache.GamesCacheCheckedFile)
 
-	err := pending.Migrage(checked, gid, name)
+	err := pending.Migrate(checked, gid, name)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusNotAcceptable)
 		return

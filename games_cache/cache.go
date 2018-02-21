@@ -35,7 +35,8 @@ func (g Game) Equals(other Game) bool {
 type Cache struct {
 	sync.RWMutex
 	filename   string
-	games      map[string]Game
+	byIid      map[string]Game
+	byName	   map[string]Game
 	lastUpdate time.Time
 }
 
@@ -56,16 +57,14 @@ func LoadCache(fname string) *Cache {
 	cache, ok := handler[fname]
 
 	if !ok {
+		cache = Cache{filename: fname, byIid: make(map[string]Game), byName: make(map[string]Game), lastUpdate: time.Now()}
 		data, err := ioutil.ReadFile(fname)
-		if err != nil {
-			cache = Cache{filename: fname, games: make(map[string]Game), lastUpdate: time.Now()}
-		} else {
-			var games map[string]Game
+		if err == nil {
+			var games []Game
 			err = json.Unmarshal(data, &games)
 			if err == nil {
-				cache = Cache{filename: fname, games: games, lastUpdate: time.Now()}
+				cache.AppendElements(games...)
 			} else {
-				cache = Cache{filename: fname, games: make(map[string]Game), lastUpdate: time.Now()}
 				log.Print(err)
 			}
 		}
@@ -75,21 +74,23 @@ func LoadCache(fname string) *Cache {
 }
 
 func (c *Cache) Store() error {
+	cont := c.GetContent()
 	c.Lock()
-	data, err := json.Marshal(c.games)
+	data, err := json.Marshal(cont)
+	c.Unlock()
+
 	if err != nil {
 		return err
 	}
-	c.Unlock()
 
 	return ioutil.WriteFile(c.filename, data, 0600)
 }
 
 func (c *Cache) GetContent() (list []Game) {
 	c.RLock()
-	list = make([]Game, len(c.games))
+	list = make([]Game, len(c.byIid))
 	i := 0
-	for _, v := range c.games {
+	for _, v := range c.byIid {
 		list[i] = v
 		i++
 	}
@@ -97,19 +98,28 @@ func (c *Cache) GetContent() (list []Game) {
 	return
 }
 
-func (c *Cache) GetElementById(gid string) (*Game, bool) {
+func (c *Cache) getElement(key string, cache map[string]Game) (*Game, bool) {
 	c.RLock()
-	g, ok := c.games[gid]
+	g, ok := cache[key]
 	c.RUnlock()
 	if ok {
 		return &g, true
 	}
 	return nil, false
+
+}
+
+func (c *Cache) GetElementById(gid string) (*Game, bool) {
+	return c.getElement(gid, c.byIid)
+}
+
+func (c *Cache) GetElementByName(name string) (*Game, bool) {
+	return c.getElement(name, c.byName)
 }
 
 func (c *Cache) GetFirst() (game Game) {
 	c.RLock()
-	for _, g := range c.games {
+	for _, g := range c.byIid {
 		game = g
 		break
 	}
@@ -119,7 +129,8 @@ func (c *Cache) GetFirst() (game Game) {
 
 func (c *Cache) ClearContent() {
 	c.Lock()
-	c.games = make(map[string]Game)
+	c.byName = make(map[string]Game)
+	c.byIid = make(map[string]Game)
 	c.lastUpdate = time.Now()
 	c.Unlock()
 }
@@ -127,9 +138,11 @@ func (c *Cache) ClearContent() {
 func (c *Cache) AppendElements(games ...Game) {
 	c.Lock()
 	for _, g := range games {
-		_, ok := c.games[g.Gid]
-		if !ok {
-			c.games[g.Gid] = g
+		_, id_ok := c.byIid[g.Gid]
+		_, name_ok := c.byName[g.Name]
+		if !id_ok && !name_ok{
+			c.byIid[g.Gid] = g
+			c.byName[g.Name] = g
 		}
 	}
 	c.lastUpdate = time.Now()
@@ -138,10 +151,18 @@ func (c *Cache) AppendElements(games ...Game) {
 
 func (c *Cache) GameInList(game Game) (alreadyPresent bool) {
 	c.RLock()
-	g, alreadyPresent := c.games[game.Gid]
-	if alreadyPresent {
-		alreadyPresent = g.Equals(game)
+	g, ok := c.byIid[game.Gid]
+	alreadyPresent = ok
+	if ok {
+		alreadyPresent = alreadyPresent && g.Equals(game)
 	}
+
+	g, ok = c.byName[game.Name]
+	alreadyPresent = alreadyPresent && ok
+	if ok {
+		alreadyPresent = alreadyPresent && g.Equals(game)
+	}
+
 	c.RUnlock()
 	return
 }
@@ -155,23 +176,39 @@ func (c *Cache) LastUpdate() (t time.Time) {
 
 func (c *Cache) Lenght() (size int) {
 	c.RLock()
-	size = len(c.games)
+	if len(c.byIid) > len(c.byName) {
+		size = len(c.byIid)
+	} else {
+		size = len(c.byName)
+	}
 	c.RUnlock()
 	return
 }
 
-func (c *Cache) Migrage(target *Cache, gid string, name string) error {
+func (c *Cache) Migrate(target *Cache, gid string, name string) error {
 	c.Lock()
-	g, ok := c.games[gid]
+	g, ok := c.byIid[gid]
+	done := ok
 	if ok {
 		if g.Name == name {
-			delete(c.games, gid)
+			delete(c.byIid, gid)
 		} else {
-			ok = false
+			done = false
+		}
+	}
+	if done {
+		g, ok = c.byName[name]
+		done = ok
+		if ok {
+			if g.Gid == gid {
+				delete(c.byName, name)
+			} else {
+				done = false
+			}
 		}
 	}
 	c.Unlock()
-	if !ok {
+	if !done {
 		return CacheError{fmt.Sprintf("Cache does not contain game %s", gid)}
 	}
 	target.AppendElements(g)
