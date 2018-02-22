@@ -12,6 +12,8 @@ import (
 	"io/ioutil"
 	"time"
 	"encoding/json"
+	"compress/gzip"
+	"io"
 )
 
 var templates = template.Must(template.ParseFiles("templates/review.html", "templates/no_files.html"))
@@ -172,11 +174,6 @@ func checkedHandler(res http.ResponseWriter, req *http.Request) {
 	checkGame(name, gid, res, req)
 }
 
-func addPostField(data url.Values, key, value string) {
-	data[key] = make([]string, 1)
-	data[key][0] = value
-}
-
 func wishlistHandler(res http.ResponseWriter, req *http.Request) {
 	name, gid, err := getGamePostFields(req)
 	if err != nil {
@@ -184,33 +181,58 @@ func wishlistHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	data := make(url.Values)
+	data := url.Values{}
 
 	cookie, err := req.Cookie("sessionid")
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusNotAcceptable)
 		return
 	}
-	addPostField(data, "sessionid", cookie.Value)
+	data.Add("sessionid", cookie.Value)
+	data.Add("appid", strings.TrimLeft(gid[strings.Index(gid,"/"):], "/"))
 
-	addPostField(data, "appid", strings.TrimLeft(gid[strings.Index(gid,"/"):], "/"))
+	pending := games_cache.LoadCache(games_cache.GamesCachePendingFile)
+	game, ok := pending.GetElementById(gid)
+	if !ok {
+		http.Error(res, fmt.Sprintf("unable to find game %s (%s) in cache", name, gid), http.StatusNotAcceptable)
+		return
+	}
 
-	postres, err := http.PostForm(steamWishlistApi, data)
+	postreq, err := http.NewRequest("POST", steamWishlistApi, strings.NewReader(data.Encode()))
+	postreq.Header.Add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+	postreq.Header.Add("X-Requested-With", "XMLHttpRequest")
+	postreq.Header.Add("Origin", "http://store.steampowered.com")
+	postreq.Header.Add("Accept", "*/*")
+	postreq.Header.Add("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.167 Safari/537.36")
+	postreq.Header.Add("Referer", game.Link)
+	postreq.Header.Add("Accept-Encoding", "gzip")
+	postreq.Header.Add("Accept-Language", "en-US,en;q=0.9,it;q=0.8")
+
+	for _, c := range req.Cookies() {
+		postreq.AddCookie(c)
+	}
+
+	postres, err := http.DefaultClient.Do(postreq)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusNotAcceptable)
 		return
 	}
 	defer postres.Body.Close()
 
-	response, err := ioutil.ReadAll(postres.Body)
-	if err != nil {
-		log.Printf("ERROR reading wishlist post response for %s (%s):\n %s\n", name, gid, err.Error())
-		http.Error(res, err.Error(), http.StatusInternalServerError)
-		return
+	var responseReader io.Reader
+
+	if postres.Header.Get("Content-Encoding") == "gzip" {
+		responseReader, err = gzip.NewReader(postres.Body)
+		if err != nil {
+			http.Error(res, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		responseReader = postres.Body
 	}
 
 	result := wishlistResult{}
-	err = json.Unmarshal(response, &result)
+	err = json.NewDecoder(responseReader).Decode(&result)
 	if err != nil {
 		log.Printf("ERROR reading wishlist post response for %s (%s):\n %s\n", name, gid, err.Error())
 		http.Error(res, err.Error(), http.StatusInternalServerError)
