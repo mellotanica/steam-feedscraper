@@ -151,17 +151,9 @@ func (c *Cache) AppendElements(games ...Game) {
 
 func (c *Cache) GameInList(game Game) (alreadyPresent bool) {
 	c.RLock()
-	g, ok := c.byIid[game.Gid]
-	alreadyPresent = ok
-	if ok {
-		alreadyPresent = alreadyPresent && g.Equals(game)
-	}
-
-	g, ok = c.byName[game.Name]
-	alreadyPresent = alreadyPresent && ok
-	if ok {
-		alreadyPresent = alreadyPresent && g.Equals(game)
-	}
+	_, alreadyPresent = c.byIid[game.Gid]
+	_, ok := c.byName[game.Name]
+	alreadyPresent = alreadyPresent || ok
 
 	c.RUnlock()
 	return

@@ -13,7 +13,17 @@ type dataSource struct {
 	parser func (*gofeed.Item) (*games_cache.Game, error)
 }
 
-const wishlistUrl = "http://store.steampowered.com/wishlist/id/mellotanica"
+// ############################
+// # global scraper variables #
+// ############################
+
+const steamUsername = "mellotanica"
+
+var blacklist = []string {
+	"tower defense",
+	"racing",
+	"race",
+}
 
 var sources = []dataSource{
 	dataSource{"http://feeds.feedburner.com/SkidrowReloadedGames", scrapers.ParseSkidRowReloaded},
@@ -23,11 +33,10 @@ var sources = []dataSource{
 	//dataSource{"http://fitgirl-repacks.com/feed/", scrapers.ParseFitGirlRepack},
 }
 
-var blacklist = []string {
-	"tower defense",
-	"racing",
-	"race",
-}
+
+// ##################
+// # scraper engine #
+// ##################
 
 func scrapeSource(source dataSource) (*[]games_cache.Game, *[]games_cache.Game) {
 	fp := gofeed.NewParser()
@@ -87,6 +96,8 @@ func cleanList(list []games_cache.Game, excludes... *games_cache.Cache) (clean_l
 	return
 }
 
+
+
 func updateCache(pending, dubious, checked *games_cache.Cache, scraped_list, scraped_dubious []games_cache.Game) {
 	scraped_list = cleanList(scraped_list, checked)
 	pending.AppendElements(scraped_list...)
@@ -97,16 +108,14 @@ func updateCache(pending, dubious, checked *games_cache.Cache, scraped_list, scr
 	dubious.Store()
 }
 
-func scrapeWishlist(checked *games_cache.Cache) {
-	//TODO: this
-}
 
 func Update_all() {
 	pending_cache := games_cache.LoadCache(games_cache.GamesCachePendingFile)
 	dubious_cache := games_cache.LoadCache(games_cache.GamesCacheDubiousFile)
 	checked_cache := games_cache.LoadCache(games_cache.GamesCacheCheckedFile)
 
-	scrapeWishlist(checked_cache)
+	scrapers.ScrapeWishlist(checked_cache, steamUsername)
+	checked_cache.Store()
 
 	for _, source := range sources {
 		list, dubious := scrapeSource(source)
