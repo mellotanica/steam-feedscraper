@@ -30,7 +30,7 @@ var sources = []dataSource{
 	dataSource{"https://feeds.feedburner.com/skidrowgamesfeed", scrapers.ParseSkidRowReloaded},
 	dataSource{"https://feeds.feedburner.com/skidrowgames", scrapers.ParseSkidRowCrack},
 	dataSource{"http://feeds.feedburner.com/skidrowcrack", scrapers.ParseSkidRowCrack},
-	//dataSource{"http://fitgirl-repacks.com/feed/", scrapers.ParseFitGirlRepack},
+	dataSource{"http://fitgirl-repacks.com/feed/", scrapers.ParseFitGirlRepack},
 }
 
 
@@ -119,7 +119,9 @@ func Update_all() {
 
 	for _, source := range sources {
 		list, dubious := scrapeSource(source)
-		updateCache(pending_cache, dubious_cache, checked_cache, *list, *dubious)
+		if list != nil || dubious != nil {
+			updateCache(pending_cache, dubious_cache, checked_cache, *list, *dubious)
+		}
 	}
 }
 

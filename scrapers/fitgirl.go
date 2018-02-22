@@ -6,10 +6,12 @@ import (
 )
 
 func ParseFitGirlRepack(item *gofeed.Item) (*games_cache.Game, error){
-	name := ""
-	genre := ""
-	link := ""
+	//name := ""
+	//genre := ""
+	//link := ""
 
-	return gameFromLinkAndName(link, name, genre)
+	//TODO: this
+
+	return nil, ScraperError{"Scraper not implemented"}
 }
 
