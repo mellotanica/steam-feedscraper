@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"compress/gzip"
 	"io"
+	"bytes"
 )
 
 var templates = template.Must(template.ParseFiles("templates/review.html", "templates/no_files.html"))
@@ -39,6 +40,12 @@ type wishlistResult struct {
 	Success bool `json:"success"`
 }
 
+type redirChan struct {
+	html string
+	response *http.Response
+	err error
+}
+
 func createCookie(name, val string, maxage int) (*http.Cookie) {
 	return & http.Cookie{
 		name,
@@ -55,15 +62,24 @@ func createCookie(name, val string, maxage int) (*http.Cookie) {
 	}
 }
 
-func renderRedir(target string, req *http.Request, w http.ResponseWriter) (string, error) {
+func renderRedir(target string, req *http.Request, response chan redirChan) {
 	newReq, err := http.NewRequest(req.Method, target, req.Body)
 	if err != nil {
-		return "", err
+		response <- redirChan{"", nil, err}
+		return
 	}
 
-	for _, c := range req.Cookies() {
-		newReq.AddCookie(c)
+	for k, v := range req.Header {
+		if k != "Accept-Encoding" {
+			newReq.Header.Set(k, v[0])
+			if len(v) > 1 {
+				for _, iv := range v[1:] {
+					newReq.Header.Add(k, iv)
+				}
+			}
+		}
 	}
+
 	// skip age and mature content checks
 	newReq.AddCookie(createCookie("mature_content", "1", -1))
 	newReq.AddCookie(createCookie("lastagecheckage", "17-August-1982", -1))
@@ -71,24 +87,21 @@ func renderRedir(target string, req *http.Request, w http.ResponseWriter) (strin
 
 	resp, err := http.DefaultClient.Do(newReq)
 	if err != nil {
-		return "", err
+		response <- redirChan{"", nil, err}
+		return
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		response <- redirChan{"", nil, err}
 	}
 
 	html := string(body)
 	html = strings.Replace(html, "https://store.steampowered.com/", fmt.Sprintf("%shttps://store.steampowered.com/", redirPath), -1)
 	html = strings.Replace(html, "http://store.steampowered.com/", fmt.Sprintf("%shttp://store.steampowered.com/", redirPath), -1)
 
-	for _, c := range resp.Cookies() {
-		http.SetCookie(w, c)
-	}
-
-	return html, nil
+	response <- redirChan{html, resp, nil}
 }
 
 func redirHandler(res http.ResponseWriter, req *http.Request) {
@@ -100,11 +113,26 @@ func redirHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	content, err := renderRedir(link, req, res)
-	if err != nil {
-		http.Error(res, err.Error(), http.StatusInternalServerError)
+	ch := make(chan redirChan)
+	go renderRedir(link, req, ch)
+	response := <- ch
+	if response.err != nil {
+		http.Error(res, response.err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	for k, v := range response.response.Header {
+		if k != "Content-Length" && k != "Content-Encoding" {
+			res.Header().Set(k, v[0])
+			if len(v) > 1 {
+				for _, iv := range v[1:] {
+					res.Header().Add(k, iv)
+				}
+			}
+		}
+	}
+
+	content := response.html
 	if strings.HasPrefix(strings.TrimSpace(content), "<?xml") {
 		content = content[strings.Index(content, "?>") + 2:]
 	}
@@ -125,17 +153,37 @@ func reviewHandler(res http.ResponseWriter, req *http.Request) {
 	}
 
 	g := pending.GetFirst()
-	content, err := renderRedir(g.Link, req, res)
-	if err != nil {
-		http.Error(res, err.Error(), http.StatusInternalServerError)
+	ch := make(chan redirChan)
+	go renderRedir(g.Link, req, ch)
+	response := <- ch
+	if response.err != nil {
+		http.Error(res, response.err.Error(), http.StatusInternalServerError)
 		return
 	}
-	sg := steamgame{g.Name, g.Gid, g.Link, g.Genre, content}
 
-	err = templates.ExecuteTemplate(res, "review.html", sg)
+	for k, v := range response.response.Header {
+		if k != "Content-Length" && k != "Content-Encoding" {
+			res.Header().Set(k, v[0])
+			if len(v) > 1 {
+				for _, iv := range v[1:] {
+					res.Header().Add(k, iv)
+				}
+			}
+		}
+	}
+
+	sg := steamgame{g.Name, g.Gid, g.Link, g.Genre,	response.html}
+
+	buffer := bytes.NewBuffer(make([]byte, 512))
+
+	err = templates.ExecuteTemplate(buffer, "review.html", sg)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusInternalServerError)
 	}
+
+	res.WriteHeader(response.response.StatusCode)
+
+	res.Write(buffer.Bytes())
 }
 
 func getGamePostFields(req *http.Request) (name, gid string, err error) {
