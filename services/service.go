@@ -9,17 +9,14 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"io/ioutil"
-	"time"
 	"encoding/json"
 	"compress/gzip"
 	"io"
-	"bytes"
 )
 
-var templates = template.Must(template.ParseFiles("templates/review.html", "templates/no_files.html"))
+var templates = template.Must(template.ParseFiles("templates/no_files.html", "templates/steamapp_overrides.html"))
 
-const redirPath = "/redir/"
+const redirPath = "/redir/?"
 const steamWishlistApi = "http://store.steampowered.com/api/addtowishlist"
 
 func store_caches(caches ...*games_cache.Cache) {
@@ -40,69 +37,6 @@ type wishlistResult struct {
 	Success bool `json:"success"`
 }
 
-type redirChan struct {
-	html string
-	response *http.Response
-	err error
-}
-
-func createCookie(name, val string, maxage int) (*http.Cookie) {
-	return & http.Cookie{
-		name,
-		val,
-		"",
-		"",
-		time.Now(),
-		"",
-		maxage,
-		false,
-		false,
-		"",
-		nil,
-	}
-}
-
-func renderRedir(target string, req *http.Request, response chan redirChan) {
-	newReq, err := http.NewRequest(req.Method, target, req.Body)
-	if err != nil {
-		response <- redirChan{"", nil, err}
-		return
-	}
-
-	for k, v := range req.Header {
-		if k != "Accept-Encoding" {
-			newReq.Header.Set(k, v[0])
-			if len(v) > 1 {
-				for _, iv := range v[1:] {
-					newReq.Header.Add(k, iv)
-				}
-			}
-		}
-	}
-
-	// skip age and mature content checks
-	newReq.AddCookie(createCookie("mature_content", "1", -1))
-	newReq.AddCookie(createCookie("lastagecheckage", "17-August-1982", -1))
-	newReq.AddCookie(createCookie("birthtime", "398383201", -1))
-
-	resp, err := http.DefaultClient.Do(newReq)
-	if err != nil {
-		response <- redirChan{"", nil, err}
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		response <- redirChan{"", nil, err}
-	}
-
-	html := string(body)
-	html = strings.Replace(html, "https://store.steampowered.com/", fmt.Sprintf("%shttps://store.steampowered.com/", redirPath), -1)
-	html = strings.Replace(html, "http://store.steampowered.com/", fmt.Sprintf("%shttp://store.steampowered.com/", redirPath), -1)
-
-	response <- redirChan{html, resp, nil}
-}
 
 func redirHandler(res http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
@@ -153,37 +87,8 @@ func reviewHandler(res http.ResponseWriter, req *http.Request) {
 	}
 
 	g := pending.GetFirst()
-	ch := make(chan redirChan)
-	go renderRedir(g.Link, req, ch)
-	response := <- ch
-	if response.err != nil {
-		http.Error(res, response.err.Error(), http.StatusInternalServerError)
-		return
-	}
 
-	for k, v := range response.response.Header {
-		if k != "Content-Length" && k != "Content-Encoding" {
-			res.Header().Set(k, v[0])
-			if len(v) > 1 {
-				for _, iv := range v[1:] {
-					res.Header().Add(k, iv)
-				}
-			}
-		}
-	}
-
-	sg := steamgame{g.Name, g.Gid, g.Link, g.Genre,	response.html}
-
-	buffer := bytes.NewBuffer(make([]byte, 512))
-
-	err = templates.ExecuteTemplate(buffer, "review.html", sg)
-	if err != nil {
-		http.Error(res, err.Error(), http.StatusInternalServerError)
-	}
-
-	res.WriteHeader(response.response.StatusCode)
-
-	res.Write(buffer.Bytes())
+	http.Redirect(res, req, redirPath+g.Link, http.StatusFound)
 }
 
 func getGamePostFields(req *http.Request) (name, gid string, err error) {

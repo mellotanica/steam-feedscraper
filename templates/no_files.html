@@ -6,10 +6,23 @@
     <style>
         body, html {background-color: #171a21; color: white;}
     </style>
+    <script>
+        function countdown(count){
+            document.getElementById("countdown").innerHTML = count.toString();
+            while(count > 0) {
+                window.setTimeout(function () {
+                    countdown(count-1)
+                }, 1000);
+                return;
+            }
+            document.getElementById("store_link").click()
+        }
+    </script>
 </head>
-<body>
+<body onload="countdown(10)">
 <div>
     <h1>No games to review</h1>
+    <h3>Redirecting to <a id="store_link" href="/redir/?https://store.steampowered.com">Steam Store</a> in <span id="countdown">10</span></h3>
 </div>
 </body>
 </html>
