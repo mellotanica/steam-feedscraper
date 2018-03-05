@@ -1,6 +1,6 @@
 # steam_feedscraper
 steam_feedscraper is a simple [Go](https://golang.org) http proxy adding browsing functionalities to steam store based on news feeds scraping.
-Running `go run application.go` and visiting `http://localhost:8080/review` will lead you to the steam store page of a game extracted from the feeds that has not already been reviewed through the app and is not already in your wishlist.
+Running `go run feedscraper.go` and visiting `http://localhost:8080/review` will lead you to the steam store page of a game extracted from the feeds that has not already been reviewed through the app and is not already in your wishlist.
 
 This tool works great alongside with [steam_deallist](https://github.com/mellotanica/steam_deallist).
 
