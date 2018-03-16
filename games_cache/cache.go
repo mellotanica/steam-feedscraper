@@ -117,6 +117,30 @@ func (c *Cache) GetElementByName(name string) (*Game, bool) {
 	return c.getElement(name, c.byName)
 }
 
+func (c *Cache) GetElementByNameAndId(name, gid string) (g *Game, ok bool) {
+	g, ok = c.GetElementById(gid)
+	if ok {
+		ok = g.Name == name
+	}
+
+	if !ok {
+		g = nil
+	}
+	return
+}
+
+func (c *Cache) GetElementByNameOrId(name, gid string) (g *Game, ok bool) {
+	ok = false
+	g = nil
+	switch {
+		case len(gid) > 0:
+			g, ok = c.GetElementById(gid)
+		case len(name) > 0:
+			g, ok = c.GetElementByName(name)
+	}
+	return
+}
+
 func (c *Cache) GetFirst() (game Game) {
 	c.RLock()
 	for _, g := range c.byIid {
