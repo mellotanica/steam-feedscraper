@@ -1,8 +1,8 @@
-package services
+package scraper
 
 import (
 	"feedscraper/games_cache"
-	"feedscraper/scrapers"
+	"feedscraper/scraper/scrapers"
 	"log"
 	"strings"
 	"github.com/mmcdole/gofeed"

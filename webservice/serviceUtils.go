@@ -1,4 +1,4 @@
-package services
+package webservice
 
 import (
 	"net/http"

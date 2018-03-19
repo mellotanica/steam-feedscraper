@@ -1,3 +1,5 @@
 .idea/
 feeds_cache_*
 tags_*
+feedscraper
+config.json

@@ -1,4 +1,4 @@
-package services
+package webservice
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"feedscraper/configs"
 )
 
 var templates = template.Must(template.ParseFiles("templates/no_files.html", "templates/steamapp_overrides.html"))
@@ -29,16 +30,23 @@ func Rewriter(h http.Handler) http.Handler {
 	})
 }
 
-func StartService(port int) {
+func StartService() {
 	router := mux.NewRouter().StrictSlash(true)
 
-	router.HandleFunc("/review", reviewHandler).Methods("GET")
+	configs := configs.GetConfigs()
+
+	if !configs.RestOnly {
+		log.Print("Enabling all web services")
+		router.HandleFunc("/review", reviewHandler).Methods("GET")
+		router.HandleFunc("/wishlist", wishlistHandler).Methods("POST")
+		router.HandleFunc(fmt.Sprintf("%s{link}", redirPath), redirHandler)
+	} else {
+		log.Print("Enabling REST services only")
+	}
 	router.HandleFunc("/getItem", getItemGETHandler).Methods("GET")
 	router.HandleFunc("/getItem", getItemPOSTHandler).Methods("POST")
 	router.HandleFunc("/checked", checkedHandler).Methods("POST")
-	router.HandleFunc("/wishlist", wishlistHandler).Methods("POST")
-	router.HandleFunc(fmt.Sprintf("%s{link}", redirPath), redirHandler)
 
-	log.Printf("Starting service on port %d\n", port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), Rewriter(router)))
+	log.Printf("Starting service on port %d\n", configs.Port)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", configs.Port), Rewriter(router)))
 }
