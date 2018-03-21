@@ -21,6 +21,21 @@ The configuration file is `config.json`, it should be located in the working dir
 - `steam_user`(string): if specified, the steam wishlist of this user is read and excluded from the scraped results
 - `genre_blacklist`(\[string\]): array of (case insensitive) genres to filter out items from scraped results
 
+### Example file
+`config.json`:
+```json
+{
+	"port": 8080,
+	"rest_only": false,
+	"steam_user": "mellotanica",
+	"genre_blacklist": [
+		"tower defense",
+		"racing",
+		"race"
+	]
+}
+```
+
 ## steam store enhance
 
 Use the [Chrome extension](https://github.com/mellotanica/Custom_Gamelist).
