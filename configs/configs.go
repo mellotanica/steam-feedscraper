@@ -10,6 +10,8 @@ import (
 type Configs struct {
 	Port int `json:"port"`
 	RestOnly bool `json:"rest_only"`
+	SteamUser string `json:"steam_user"`
+	Blacklist []string `json:"genre_blacklist"`
 }
 
 var configFile = "config.json"
@@ -25,7 +27,9 @@ func (c *Configs) store(fileName string) error {
 }
 
 func getDefaultConfigs() *Configs {
-	return &Configs{8080, false}
+	bl := make([]string, 1)
+	bl[0] = "none"
+	return &Configs{8080, false, "", bl}
 }
 
 func GetConfigs() *Configs {
@@ -40,8 +44,8 @@ func GetConfigs() *Configs {
 			}
 		} else if os.IsNotExist(err) {
 			activeConfigs = getDefaultConfigs()
-			err = activeConfigs.store(configFile)
 		}
+		err = activeConfigs.store(configFile)
 	}
 	if err != nil {
 		log.Fatalf("Error reading configurations: %s\n", err.Error())

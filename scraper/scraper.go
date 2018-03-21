@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"github.com/mmcdole/gofeed"
+	"feedscraper/configs"
 )
 
 type dataSource struct {
@@ -16,14 +17,6 @@ type dataSource struct {
 // ############################
 // # global scraper variables #
 // ############################
-
-const steamUsername = "mellotanica"
-
-var blacklist = []string {
-	"tower defense",
-	"racing",
-	"race",
-}
 
 var sources = []dataSource{
 	dataSource{"http://feeds.feedburner.com/SkidrowReloadedGames", scrapers.ParseSkidRowReloaded},
@@ -69,6 +62,8 @@ func scrapeSource(source dataSource) (*[]games_cache.Game, *[]games_cache.Game) 
 func cleanList(list []games_cache.Game, excludes... *games_cache.Cache) (clean_list []games_cache.Game) {
 	clean_list = make([]games_cache.Game, 0, len(list))
 
+	config := configs.GetConfigs()
+
 	for _, g := range list {
 		skip := false
 		for _, e := range excludes {
@@ -80,15 +75,18 @@ func cleanList(list []games_cache.Game, excludes... *games_cache.Cache) (clean_l
 		if skip {
 			continue
 		}
-		genre := strings.ToLower(g.Genre)
-		for _, b := range blacklist {
-			if strings.Contains(genre, b) {
-				skip = true
-				break
+		if config.Blacklist != nil && len(config.Blacklist) > 0 {
+			genre := strings.ToLower(g.Genre)
+			for _, b := range config.Blacklist {
+				bl := strings.ToLower(b)
+				if strings.Contains(genre, bl) {
+					skip = true
+					break
+				}
 			}
-		}
-		if skip {
-			continue
+			if skip {
+				continue
+			}
 		}
 		clean_list = append(clean_list, g)
 	}
@@ -114,8 +112,11 @@ func Update_all() {
 	dubious_cache := games_cache.LoadCache(games_cache.GamesCacheDubiousFile)
 	checked_cache := games_cache.LoadCache(games_cache.GamesCacheCheckedFile)
 
-	scrapers.ScrapeWishlist(checked_cache, steamUsername)
-	checked_cache.Store()
+	config := configs.GetConfigs()
+	if len(config.SteamUser) > 0 {
+		scrapers.ScrapeWishlist(checked_cache, config.SteamUser)
+		checked_cache.Store()
+	}
 
 	for _, source := range sources {
 		list, dubious := scrapeSource(source)
