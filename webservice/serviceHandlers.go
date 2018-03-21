@@ -66,7 +66,7 @@ func reviewHandler(res http.ResponseWriter, req *http.Request) {
 	http.Redirect(res, req, redirPath+g.Link, http.StatusFound)
 }
 
-func getItemGETHandler(res http.ResponseWriter, req *http.Request) {
+func getItemGETHandler(res http.ResponseWriter, _ *http.Request) {
 	var err error
 
 	pending := games_cache.LoadCache(games_cache.GamesCachePendingFile)
@@ -128,7 +128,17 @@ func checkedHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	checkGame(name, gid, res, req)
+	checkGame(name, gid, res)
+
+	http.Redirect(res, req, "/review", http.StatusFound)
+}
+
+func checkGetHandler(res http.ResponseWriter, req *http.Request) {
+	moveHandler(res, req, checkGame)
+}
+
+func doubtHandler(res http.ResponseWriter, req *http.Request) {
+	moveHandler(res, req, doubtGame)
 }
 
 func wishlistHandler(res http.ResponseWriter, req *http.Request) {
@@ -201,6 +211,8 @@ func wishlistHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	checkGame(name, gid, res, req)
+	checkGame(name, gid, res)
+
+	http.Redirect(res, req, "/review", http.StatusFound)
 }
 

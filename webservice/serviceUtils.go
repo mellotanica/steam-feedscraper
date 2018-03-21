@@ -26,17 +26,39 @@ func getGamePostFields(req *http.Request) (name, gid string, err error) {
 	return
 }
 
-func checkGame(name, gid string, res http.ResponseWriter, req *http.Request) {
-	pending := games_cache.LoadCache(games_cache.GamesCachePendingFile)
-	checked := games_cache.LoadCache(games_cache.GamesCacheCheckedFile)
-
-	err := pending.Migrate(checked, gid, name)
+func migrateGame(name, gid string, src, dest *games_cache.Cache, res http.ResponseWriter) {
+	err := src.Migrate(dest, gid, name)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusNotAcceptable)
 		return
 	}
 
-	go store_caches(pending, checked)
-
-	http.Redirect(res, req, "/review", http.StatusFound)
+	go store_caches(src, dest)
 }
+
+func checkGame(name, gid string, res http.ResponseWriter) {
+	pending := games_cache.LoadCache(games_cache.GamesCachePendingFile)
+	checked := games_cache.LoadCache(games_cache.GamesCacheCheckedFile)
+
+	migrateGame(name, gid, pending, checked, res)
+}
+
+func doubtGame(name, gid string, res http.ResponseWriter) {
+	pending := games_cache.LoadCache(games_cache.GamesCachePendingFile)
+	dubious := games_cache.LoadCache(games_cache.GamesCacheDubiousFile)
+
+	migrateGame(name, gid, pending, dubious, res)
+}
+
+func moveHandler(res http.ResponseWriter, req *http.Request, function func(string, string, http.ResponseWriter)) {
+	name, gid, err := getGamePostFields(req)
+	if err != nil {
+		http.Error(res, err.Error(), http.StatusNotAcceptable)
+		return
+	}
+
+	function(name, gid, res)
+
+	getItemGETHandler(res, req)
+}
+
