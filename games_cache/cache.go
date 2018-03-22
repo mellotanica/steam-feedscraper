@@ -201,8 +201,7 @@ func (c *Cache) Lenght() (size int) {
 	return
 }
 
-func (c *Cache) Migrate(target *Cache, gid string, name string) error {
-	c.Lock()
+func (c *Cache) removeElementLocked(gid, name string) (*Game, error) {
 	g, ok := c.byIid[gid]
 	done := ok
 	if ok {
@@ -223,10 +222,43 @@ func (c *Cache) Migrate(target *Cache, gid string, name string) error {
 			}
 		}
 	}
-	c.Unlock()
 	if !done {
-		return CacheError{fmt.Sprintf("Cache does not contain game %s", gid)}
+		return nil, CacheError{fmt.Sprintf("Cache does not contain game %s", gid)}
 	}
-	target.AppendElements(g)
+	return &g, nil
+}
+
+func (c *Cache) RemoveElement (gid, name string) (*Game, error) {
+	c.Lock()
+	g, err := c.removeElementLocked(gid, name)
+	c.Unlock()
+	return g, err
+}
+
+func (c *Cache) Migrate(target *Cache, gid string, name string) error {
+	g, err := c.RemoveElement(gid, name)
+	if err != nil{
+		return err
+	}
+	target.AppendElements(*g)
 	return nil
+}
+
+func (c *Cache) CleanDuplicates(other ...*Cache) {
+	c.Lock()
+	for _, g := range c.byIid {
+		for _, cache := range other {
+			if cache.GameInList(g) {
+				c.removeElementLocked(g.Gid, g.Name)
+			}
+		}
+	}
+	for _, g := range c.byName {
+		for _, cache := range other {
+			if cache.GameInList(g) {
+				c.removeElementLocked(g.Gid, g.Name)
+			}
+		}
+	}
+	c.Unlock()
 }
