@@ -18,12 +18,12 @@ type dataSource struct {
 // # global scraper variables #
 // ############################
 
-var sources = []dataSource{
+var sources = []dataSource {
 	dataSource{"http://feeds.feedburner.com/SkidrowReloadedGames", scrapers.ParseSkidRowReloaded},
 	dataSource{"https://feeds.feedburner.com/skidrowgamesfeed", scrapers.ParseSkidRowReloaded},
 	dataSource{"https://feeds.feedburner.com/skidrowgames", scrapers.ParseSkidRowCrack},
 	dataSource{"http://feeds.feedburner.com/skidrowcrack", scrapers.ParseSkidRowCrack},
-	dataSource{"http://fitgirl-repacks.com/feed/", scrapers.ParseFitGirlRepack},
+	dataSource{"http://fitgirl-repacks.site/feed/", scrapers.ParseFitGirlRepack},
 }
 
 
