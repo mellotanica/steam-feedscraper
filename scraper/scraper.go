@@ -49,7 +49,7 @@ func scrapeSource(source dataSource) (*[]games_cache.Game, *[]games_cache.Game) 
 			case scrapers.ScraperWarning:
 				dubious_games = append(dubious_games, (*game))
 			default:
-				log.Printf("error parsing game: %s\n", err.Error())
+				log.Printf("error parsing game (%s): %s\n", source.url, err.Error())
 			}
 		} else if game != nil {
 			games = append(games, (*game))
@@ -114,7 +114,7 @@ func Update_all() {
 
 	config := configs.GetConfigs()
 	if len(config.SteamUser) > 0 {
-		scrapers.ScrapeWishlist(checked_cache, config.SteamUser)
+		scrapers.ScrapeSteam(checked_cache, config.SteamUser)
 		checked_cache.Store()
 	}
 
@@ -124,5 +124,7 @@ func Update_all() {
 			updateCache(pending_cache, dubious_cache, checked_cache, *list, *dubious)
 		}
 	}
+
+
 }
 
