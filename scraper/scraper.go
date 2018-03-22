@@ -125,7 +125,10 @@ func Update_all() {
 		}
 	}
 
-	pending_cache.CleanDuplicates(checked_cache, dubious_cache)
+	dubious_cache.CleanDuplicates(checked_cache)
+	dubious_cache.Store()
+
+	pending_cache.CleanDuplicates(checked_cache)
 	pending_cache.Store()
 }
 
